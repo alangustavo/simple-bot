@@ -1,6 +1,5 @@
 import { WebsocketStream } from '@binance/connector-typescript';
 import type { Observable, Observer } from './types';
-import Balance from './Balance';
 
 class BinanceBalanceStream implements Observable {
     private static instance: BinanceBalanceStream;

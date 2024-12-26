@@ -1,8 +1,8 @@
+import BinanceBalanceStream from './BinanceBalanceStream';
 import BinanceClientSingleton from './BinanceClientSingleton';
-import BinanceKlineStream from './BinanceKlineStream';
 import type { BalanceData, Observer } from './types';
 
-class Balance {
+class Balance implements Observer {
     private balances: Record<string, BalanceData> = {};
 
     constructor() {
@@ -20,10 +20,14 @@ class Balance {
             };
             return acc;
         }, {});
+
+        const stream = BinanceBalanceStream.getInstance();
+        stream.addObserver(this);
     }
 
-    public updateBalances(balances: { a: string, f: string, l: string; }[]): void {
-        for (const balance of balances) {
+    public update(data: Record<string, unknown>): void {
+        for (const key of Object.keys(data)) {
+            const balance = data[key] as { a: string, f: string, l: string; };
             this.balances[balance.a] = {
                 asset: balance.a,
                 free: Number.parseFloat(balance.f),
@@ -36,22 +40,3 @@ class Balance {
         return this.balances;
     }
 }
-
-class BalanceStream implements Observer {
-    private balance: Balance;
-
-    constructor(balance: Balance) {
-        this.balance = balance;
-        const stream = BinanceKlineStream.getInstance();
-        stream.addObserver(this);
-    }
-
-    public update(data: Record<string, unknown>): void {
-        if (data.e === 'outboundAccountPosition') {
-            const balances = data.B as { a: string, f: string, l: string; }[];
-            this.balance.updateBalances(balances);
-        }
-    }
-}
-
-export default Balance;
