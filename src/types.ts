@@ -15,16 +15,23 @@ export interface KlineData {
     // ignore: string;
 }
 
+export interface BalanceData {
+    asset: string;
+    free: number;
+    locked: number;
+}
+
 export interface Observer {
     update(data: Record<string, unknown>): void;
 }
 export interface ObserverKline extends Observer {
     symbol: string;
     interval: Interval;
+    stream: string;
 }
 
 export interface Observable {
     addObserver(observer: Observer): void;
     removeObserver(observer: Observer): void;
-    notifyObservers(stream: string, data: Record<string, unknown>): void;
+    notifyObservers(data: Record<string, unknown>): void;
 }

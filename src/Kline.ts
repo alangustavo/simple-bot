@@ -6,9 +6,10 @@ import type { ObserverKline, KlineData } from './types';
 class Kline implements ObserverKline {
     public symbol: string;
     public interval: Interval;
+    public stream: string;
     private limit: number;
     private klines: KlineData[] = [];
-    private stream: string;
+
 
     constructor(symbol: string, interval: Interval, limit: number) {
         this.symbol = symbol;

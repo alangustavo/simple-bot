@@ -1,11 +1,10 @@
 import { type Interval, WebsocketStream } from '@binance/connector-typescript';
 import type { Observable, ObserverKline } from './types';
 
-
 class BinanceKlineStream implements Observable {
     private static instance: BinanceKlineStream;
     private websocketStreamClient: WebsocketStream;
-    private observers: ObserverKline[] = [];
+    private observers: Set<ObserverKline> = new Set();
     private activeStreams: { symbol: string, interval: Interval; }[] = [];
 
     private constructor() {
@@ -17,8 +16,7 @@ class BinanceKlineStream implements Observable {
             },
             message: (data: string) => {
                 const parsedData = JSON.parse(data);
-                const stream = parsedData.stream;
-                this.notifyObservers(stream, parsedData);
+                this.notifyObservers(parsedData);
             },
         };
         this.websocketStreamClient = new WebsocketStream({ callbacks, combinedStreams: true });
@@ -32,16 +30,18 @@ class BinanceKlineStream implements Observable {
     }
 
     public addObserver(observer: ObserverKline): void {
-        this.observers.push(observer);
+        this.observers.add(observer);
+        console.log(`Quantidade de Observers ${this.observers.size}`);
+
     }
 
     public removeObserver(observer: ObserverKline): void {
-        this.observers = this.observers.filter(obs => obs !== observer);
+        this.observers.delete(observer);
     }
 
-    public notifyObservers(stream: string, data: Record<string, unknown>): void {
+    public notifyObservers(data: Record<string, unknown>): void {
         for (const observer of this.observers) {
-            if (`${observer.symbol.toLowerCase()}@kline_${observer.interval}` === stream) {
+            if (observer.stream === data.stream) {
                 observer.update(data);
             }
         }
@@ -56,7 +56,7 @@ class BinanceKlineStream implements Observable {
     public unsubscribeFromKline(symbol: string, interval: Interval) {
         this.websocketStreamClient.unsubscribe(`${symbol.toLowerCase()}@kline_${interval}`);
         this.activeStreams = this.activeStreams.filter(stream => stream.symbol !== symbol || stream.interval !== interval);
-        this.observers = this.observers.filter(observer => observer.symbol !== symbol || observer.interval !== interval);
+        this.observers = new Set([...this.observers].filter(observer => observer.symbol !== symbol || observer.interval !== interval));
     }
 
     public disconnect() {
@@ -76,7 +76,7 @@ class BinanceKlineStream implements Observable {
                     message: (data: string) => {
                         const parsedData = JSON.parse(data);
                         const stream = parsedData.stream;
-                        this.notifyObservers(stream, parsedData);
+                        this.notifyObservers(parsedData);
                     },
                 },
                 combinedStreams: true
