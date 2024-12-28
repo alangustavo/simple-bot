@@ -15,6 +15,8 @@ export interface KlineData {
     // ignore: string;
 }
 
+export type Signal = 'BUY' | 'SELL' | 'HOLD';
+
 export interface BalanceData {
     asset: string;
     free: number;

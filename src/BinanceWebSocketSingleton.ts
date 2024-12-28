@@ -1,16 +1,18 @@
 import { WebsocketAPI } from '@binance/connector-typescript';
+import BinanceClientSingleton from './BinanceClientSingleton';
 
 class BinanceWebSocketSingleton {
     private static instance: WebsocketAPI;
 
-    private constructor() { }
+    private constructor() {
+    }
 
     public static async getInstance(): Promise<WebsocketAPI> {
         // console.log;
         const callbacks = {
             open: (client: WebsocketAPI) => {
                 console.log('Conectado ao servidor WebSocket');
-                client.exchangeInfo();
+                // client.exchangeInfo();
             },
             close: () => {
                 console.log('Desconectado do servidor WebSocket');

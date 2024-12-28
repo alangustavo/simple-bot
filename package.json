@@ -5,13 +5,14 @@
   "main": "dist/bot.js",
   "scripts": {
     "build": "tsc",
-    "start": "ts-node src/bot.ts"
+    "start": "ts-node src/index.ts"
   },
   "author": "Your Name",
   "license": "ISC",
   "dependencies": {
     "@binance/connector-typescript": "^0.3.14",
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "telegraf": "^4.16.3"
   },
   "devDependencies": {
     "ts-node": "^10.2.1",

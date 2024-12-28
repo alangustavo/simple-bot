@@ -1,7 +1,11 @@
 import type { Interval } from '@binance/connector-typescript';
 import BinanceClientSingleton from './BinanceClientSingleton';
 import BinanceKlineStream from './BinanceKlineStream';
-import type { ObserverKline, KlineData } from './types';
+import type { ObserverKline, KlineData, Signal } from './types';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import TelegramBot from './TelegramBot';
+
 
 class Kline implements ObserverKline {
     public symbol: string;
@@ -9,7 +13,7 @@ class Kline implements ObserverKline {
     public stream: string;
     private limit: number;
     private klines: KlineData[] = [];
-
+    private lastSignal: Signal = 'BUY';
 
     constructor(symbol: string, interval: Interval, limit: number) {
         this.symbol = symbol;
@@ -91,6 +95,10 @@ class Kline implements ObserverKline {
         return this.klines;
     }
 
+    public getPrice() {
+        return this.klines[this.klines.length - 1].close;
+    }
+
     public getCloses(): number[] {
         return this.klines.map(kline => kline.close);
     }
@@ -121,6 +129,93 @@ class Kline implements ObserverKline {
 
     public getTakerBuyQuoteAssetVolumes(): number[] {
         return this.klines.map(kline => kline.takerBuyQuoteAssetVolume);
+    }
+
+    calculatePivotPoints(): { pivot: number; support: number[]; resistance: number[]; } {
+        const high = Math.max(...this.getHighs());
+        const low = Math.min(...this.getLows());
+        const close = this.getPrice();
+
+        const pivot = (high + low + close) / 3;
+        const resistance = [2 * pivot - low, pivot + (high - low)];
+        const support = [2 * pivot - high, pivot - (high - low)];
+
+        return { pivot, support, resistance };
+    }
+
+    calculateRSI(period: number): number {
+        let gains = 0;
+        let losses = 0;
+        const closes = this.getCloses();
+        for (let i = 1; i < period + 1; i++) {
+            const change = closes[i] - closes[i - 1];
+            if (change > 0) gains += change;
+            else losses -= change;
+        }
+
+        const averageGain = gains / period;
+        const averageLoss = losses / period;
+
+        const rs = averageGain / averageLoss;
+        return 100 - 100 / (1 + rs);
+    }
+
+    calculateBollingerBands(period: number): { upper: number; lower: number; } {
+        const closes = this.getCloses().slice(-period);
+        const mean = closes.reduce((sum, close) => sum + close, 0) / period;
+
+        const stddev = Math.sqrt(closes.map((close) => (close - mean) ** 2).reduce((a, b) => a + b, 0) / period);
+
+        return { upper: mean + 2 * stddev, lower: mean - 2 * stddev };
+    }
+
+    public getTradingSignal(): Signal {
+        const price = this.getPrice();
+        const pivotLevels = this.calculatePivotPoints();
+        const rsi = this.calculateRSI(14);
+        const bands = this.calculateBollingerBands(20);
+        const dateTime = new Date().toISOString();
+        const csvFilePath = path.join(__dirname, `${this.symbol}.csv`);
+        const csvHeader = 'Date,Current Price,Pivot,Support1,Support2,Resistance1,Resistance2,RSI,Upper Band,Lower Band,Signal\n';
+
+        if (!fs.existsSync(csvFilePath)) {
+            fs.writeFileSync(csvFilePath, csvHeader);
+        }
+
+        let signal: Signal = 'HOLD';
+
+        // Buy conditions
+        const isPriceNearSupport = price <= pivotLevels.support[0] * 1.01; // 1% above support
+        const isOversold = rsi < 30;
+        const isBelowLowerBand = price < bands.lower;
+
+        if (isPriceNearSupport && isOversold && isBelowLowerBand) {
+            signal = 'BUY';
+        }
+
+        // Sell conditions
+        const isPriceNearResistance = price >= pivotLevels.resistance[0] * 0.99; // 1% below resistance
+        const isOverbought = rsi > 70;
+        const isAboveUpperBand = price > bands.upper;
+
+        if (isPriceNearResistance && isOverbought && isAboveUpperBand) {
+            signal = 'SELL';
+        }
+
+        const csvRow = `${dateTime},${price},${pivotLevels.pivot},${pivotLevels.support[0]},${pivotLevels.support[1]},${pivotLevels.resistance[0]},${pivotLevels.resistance[1]},${rsi},${bands.upper},${bands.lower},${signal}\n`;
+        fs.appendFileSync(csvFilePath, csvRow);
+        if (this.lastSignal !== signal) {
+            this.lastSignal = signal;
+            const telegram = TelegramBot.getInstance();
+            const chatId = process.env.TELEGRAM_CHAT_ID;
+            if (chatId) {
+                telegram.sendMessage(chatId, `Trading signal for ${this.symbol}: ${signal} {${price}}`);
+            } else {
+                console.error('TELEGRAM_CHAT_ID is not defined');
+            }
+        }
+
+        return signal;
     }
 }
 

@@ -1,19 +1,32 @@
-import { Interval } from '@binance/connector-typescript';
-import BinanceKlineStream from './BinanceKlineStream';
-import Kline from './Kline';
-import BinanceClientSingleton from './BinanceClientSingleton';
+import VolatilityMonitor from './VolatilityMonitor';
+// import Balance from './Balance';
+// import Kline from './Kline';
+// import { Observer } from './types';
+// class Bot extendes Observer {
+//     private balance: Balance;
+//     private kline: Kline;
+//     constructor(quote: string) {
+//         this.balance = new Balance();
+//         this.kline = new Kline();
+//     }
+//     public update(data: Record<string, unknown>): void {
+//         if(data.stream === 'kline') {
+//         this.kline.update(data);
+//     } else if (data.stream === 'balance') {
+//         this.balance.update(data);
+//     }
+// }
+// }
 
 async function main() {
-    const kline = new Kline('BTCUSDT', Interval['1m'], 4);
+    // ...existing code...
 
-    const stream = BinanceKlineStream.getInstance();
-    stream.addObserver(kline);
+    const monitor = new VolatilityMonitor('USDT', 100000, '15m', 60);
+    await monitor.monitorSymbols();
 
-
-    // const client = BinanceClientSingleton.getInstance();
-    // const accountInfo = await client.accountInformation();
-    // console.log(accountInfo);
-
+    setInterval(async () => {
+        await monitor.monitorSymbols();
+    }, 60 * 60 * 1000); // 1 hour interval
 }
 
 main();
