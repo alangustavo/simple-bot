@@ -6,7 +6,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import TelegramBot from './TelegramBot';
 
-
 class Kline implements ObserverKline {
     public symbol: string;
     public interval: Interval;
@@ -39,7 +38,6 @@ class Kline implements ObserverKline {
             numberOfTrades: kline[8] as number,
             takerBuyBaseAssetVolume: Number.parseFloat(kline[9] as string),
             takerBuyQuoteAssetVolume: Number.parseFloat(kline[10] as string),
-            // ignore: kline[11] as string,
         }));
 
         const stream = BinanceKlineStream.getInstance();
@@ -77,17 +75,14 @@ class Kline implements ObserverKline {
                 numberOfTrades: kline.n,
                 takerBuyBaseAssetVolume: Number.parseFloat(kline.V),
                 takerBuyQuoteAssetVolume: Number.parseFloat(kline.Q),
-                // ignore: kline.B,
             };
 
-            if (lastKline.openTime !== klineData.openTime) { // kline is closed
-                this.klines.shift(); // Remove the first kline
-                this.klines.push(klineData); // Add the new closed kline
+            if (lastKline.openTime !== klineData.openTime) {
+                this.klines.shift();
+                this.klines.push(klineData);
             } else {
-                this.klines[this.klines.length - 1] = klineData; // Update the last kline
+                this.klines[this.klines.length - 1] = klineData;
             }
-            // console.log(klineData, this.klines.length);
-            // console.log(this.getCloses());
         }
     }
 
@@ -99,65 +94,77 @@ class Kline implements ObserverKline {
         return this.klines[this.klines.length - 1].close;
     }
 
+    private calculateMovingAverage(period: number): number {
+        const closes = this.getCloses().slice(-period);
+        return closes.reduce((sum, close) => sum + close, 0) / period;
+    }
+
     public getCloses(): number[] {
         return this.klines.map(kline => kline.close);
     }
 
-    public getOpens(): number[] {
-        return this.klines.map(kline => kline.open);
-    }
+    public getTradingSignal(): Signal {
+        const price = this.getPrice();
+        const { support, resistance } = this.calculateSupportResistance();
+        const bands = this.calculateBollingerBands(20);
+        const movingAverage = this.calculateMovingAverage(50);
 
-    public getHighs(): number[] {
-        return this.klines.map(kline => kline.high);
-    }
+        let signal: Signal = 'HOLD';
 
-    public getLows(): number[] {
-        return this.klines.map(kline => kline.low);
-    }
+        const isPriceNearSupport1 = price >= support[0] && price <= support[0] * 1.02;
+        const isPriceNearSupport2 = price >= support[1] && price <= support[1] * 1.02;
+        const isBelowLowerBand = price < bands.lower;
+        const isPriceAboveMA = price > movingAverage;
 
-    public getVolumes(): number[] {
-        return this.klines.map(kline => kline.volume);
-    }
-
-    public getQuoteAssetVolumes(): number[] {
-        return this.klines.map(kline => kline.quoteAssetVolume);
-    }
-
-    public getTakerBuyBaseAssetVolumes(): number[] {
-        return this.klines.map(kline => kline.takerBuyBaseAssetVolume);
-    }
-
-    public getTakerBuyQuoteAssetVolumes(): number[] {
-        return this.klines.map(kline => kline.takerBuyQuoteAssetVolume);
-    }
-
-    calculatePivotPoints(): { pivot: number; support: number[]; resistance: number[]; } {
-        const high = Math.max(...this.getHighs());
-        const low = Math.min(...this.getLows());
-        const close = this.getPrice();
-
-        const pivot = (high + low + close) / 3;
-        const resistance = [2 * pivot - low, pivot + (high - low)];
-        const support = [2 * pivot - high, pivot - (high - low)];
-
-        return { pivot, support, resistance };
-    }
-
-    calculateRSI(period: number): number {
-        let gains = 0;
-        let losses = 0;
-        const closes = this.getCloses();
-        for (let i = 1; i < period + 1; i++) {
-            const change = closes[i] - closes[i - 1];
-            if (change > 0) gains += change;
-            else losses -= change;
+        if ((isPriceNearSupport1 || isPriceNearSupport2) && isBelowLowerBand && isPriceAboveMA) {
+            signal = 'BUY';
         }
 
-        const averageGain = gains / period;
-        const averageLoss = losses / period;
+        const isPriceNearResistance1 = price <= resistance[0] && price >= resistance[0] * 0.98;
+        const isPriceNearResistance2 = price <= resistance[1] && price >= resistance[1] * 0.98;
+        const isAboveUpperBand = price > bands.upper;
 
-        const rs = averageGain / averageLoss;
-        return 100 - 100 / (1 + rs);
+        if ((isPriceNearResistance1 || isPriceNearResistance2) && isAboveUpperBand) {
+            signal = 'SELL';
+        }
+
+        if (this.lastSignal !== signal) {
+            this.lastSignal = signal;
+            const telegram = TelegramBot.getInstance();
+            const chatId = process.env.TELEGRAM_CHAT_ID;
+            if (chatId) {
+                telegram.sendMessage(chatId, `${process.env.COMPUTER}: Trading signal for ${this.symbol}_${this.interval}: ${signal} ${price}`);
+            } else {
+                console.error('TELEGRAM_CHAT_ID is not defined');
+            }
+        }
+        const dateTime = new Date().toISOString();
+        const csvFilePath = path.join(__dirname, `${this.symbol}_${this.interval}.csv`);
+        const csvHeader = 'Date,Current Price,Support1,Support2,Resistance1,Resistance2,Upper Band,Lower Band,Moving Average,Signal\n';
+
+        if (!fs.existsSync(csvFilePath)) {
+            fs.writeFileSync(csvFilePath, csvHeader);
+        }
+        const csvRow = `${dateTime},${price},${support[0]},${support[1]},${resistance[0]},${resistance[1]},${bands.upper},${bands.lower},${movingAverage},${signal}\n`;
+        fs.appendFileSync(csvFilePath, csvRow);
+
+        return signal;
+    }
+
+    private calculateSupportResistance(): { support: number[]; resistance: number[]; } {
+        const highs = this.getHighs();
+        const lows = this.getLows();
+
+        const support = [
+            Math.min(...lows.slice(-10, -5)), // Support1 from the last 10 to 5 klines
+            Math.min(...lows.slice(-20, -10)) // Support2 from the last 20 to 10 klines
+        ];
+        const resistance = [
+            Math.max(...highs.slice(-10, -5)), // Resistance1 from the last 10 to 5 klines
+            Math.max(...highs.slice(-20, -10)) // Resistance2 from the last 20 to 10 klines
+        ];
+
+        return { support, resistance };
     }
 
     calculateBollingerBands(period: number): { upper: number; lower: number; } {
@@ -169,53 +176,12 @@ class Kline implements ObserverKline {
         return { upper: mean + 2 * stddev, lower: mean - 2 * stddev };
     }
 
-    public getTradingSignal(): Signal {
-        const price = this.getPrice();
-        const pivotLevels = this.calculatePivotPoints();
-        const rsi = this.calculateRSI(14);
-        const bands = this.calculateBollingerBands(20);
-        const dateTime = new Date().toISOString();
-        const csvFilePath = path.join(__dirname, `${this.symbol}.csv`);
-        const csvHeader = 'Date,Current Price,Pivot,Support1,Support2,Resistance1,Resistance2,RSI,Upper Band,Lower Band,Signal\n';
+    public getHighs(): number[] {
+        return this.klines.map(kline => kline.high);
+    }
 
-        if (!fs.existsSync(csvFilePath)) {
-            fs.writeFileSync(csvFilePath, csvHeader);
-        }
-
-        let signal: Signal = 'HOLD';
-
-        // Buy conditions
-        const isPriceNearSupport = price <= pivotLevels.support[0] * 1.01; // 1% above support
-        const isOversold = rsi < 30;
-        const isBelowLowerBand = price < bands.lower;
-
-        if (isPriceNearSupport && isOversold && isBelowLowerBand) {
-            signal = 'BUY';
-        }
-
-        // Sell conditions
-        const isPriceNearResistance = price >= pivotLevels.resistance[0] * 0.99; // 1% below resistance
-        const isOverbought = rsi > 70;
-        const isAboveUpperBand = price > bands.upper;
-
-        if (isPriceNearResistance && isOverbought && isAboveUpperBand) {
-            signal = 'SELL';
-        }
-
-        const csvRow = `${dateTime},${price},${pivotLevels.pivot},${pivotLevels.support[0]},${pivotLevels.support[1]},${pivotLevels.resistance[0]},${pivotLevels.resistance[1]},${rsi},${bands.upper},${bands.lower},${signal}\n`;
-        fs.appendFileSync(csvFilePath, csvRow);
-        if (this.lastSignal !== signal) {
-            this.lastSignal = signal;
-            const telegram = TelegramBot.getInstance();
-            const chatId = process.env.TELEGRAM_CHAT_ID;
-            if (chatId) {
-                telegram.sendMessage(chatId, `Trading signal for ${this.symbol}: ${signal} {${price}}`);
-            } else {
-                console.error('TELEGRAM_CHAT_ID is not defined');
-            }
-        }
-
-        return signal;
+    public getLows(): number[] {
+        return this.klines.map(kline => kline.low);
     }
 }
 

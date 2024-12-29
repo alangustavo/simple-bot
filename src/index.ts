@@ -34,16 +34,16 @@ async function main() {
     // setInterval(async () => {
     //     await monitor.updateSymbols();
     // }, 60 * 60 * 1000); // 1 hour interval
-    const SOL = new Kline('SOLUSDT', Interval['1m'], 200);
-    const RLC = new Kline('RLCUSDT', Interval['1m'], 200);
-    const LIT = new Kline('LITUSDT', Interval['1m'], 200);
-    const ATA = new Kline('ATAUSDT', Interval['1m'], 200);
-    const IDEX = new Kline('IDEXUSDT', Interval['1m'], 200);
-    const SCRT = new Kline('SCRTUSDT', Interval['1m'], 200);
-    const STEEM = new Kline('STEEMUSDT', Interval['1m'], 200);
-    const MDT = new Kline('MDTUSDT', Interval['1m'], 200);
-    const OGN = new Kline('OGNUSDT', Interval['1m'], 200);
-    const UTK = new Kline('UTKUSDT', Interval['1m'], 200);
+    const SOL = new Kline('SOLUSDT', Interval['15m'], 200);
+    const RLC = new Kline('RLCUSDT', Interval['15m'], 200);
+    const LIT = new Kline('LITUSDT', Interval['15m'], 200);
+    const ATA = new Kline('ATAUSDT', Interval['15m'], 200);
+    const IDEX = new Kline('IDEXUSDT', Interval['15m'], 200);
+    const SCRT = new Kline('SCRTUSDT', Interval['15m'], 200);
+    const STEEM = new Kline('STEEMUSDT', Interval['15m'], 200);
+    const MDT = new Kline('MDTUSDT', Interval['15m'], 200);
+    const OGN = new Kline('OGNUSDT', Interval['15m'], 200);
+    const UTK = new Kline('UTKUSDT', Interval['15m'], 200);
     setInterval(() => {
         SOL.getTradingSignal();
         RLC.getTradingSignal();
