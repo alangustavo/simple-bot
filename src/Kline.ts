@@ -116,7 +116,7 @@ class Kline implements ObserverKline {
         const isBelowLowerBand = price < bands.lower;
         const isPriceAboveMA = price > movingAverage;
 
-        if ((isPriceNearSupport1 || isPriceNearSupport2) && isBelowLowerBand && isPriceAboveMA) {
+        if ((isPriceNearSupport1 || isPriceNearSupport2) && (isBelowLowerBand || isPriceAboveMA)) {
             signal = 'BUY';
         }
 
@@ -156,11 +156,11 @@ class Kline implements ObserverKline {
         const lows = this.getLows();
 
         const support = [
-            Math.min(...lows.slice(-10, -5)), // Support1 from the last 10 to 5 klines
+            Math.min(...lows.slice(-10)), // Support1 from the last 10 klines
             Math.min(...lows.slice(-20, -10)) // Support2 from the last 20 to 10 klines
         ];
         const resistance = [
-            Math.max(...highs.slice(-10, -5)), // Resistance1 from the last 10 to 5 klines
+            Math.max(...highs.slice(-10)), // Resistance1 from the last 10 klines
             Math.max(...highs.slice(-20, -10)) // Resistance2 from the last 20 to 10 klines
         ];
 
