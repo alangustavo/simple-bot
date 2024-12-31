@@ -57,6 +57,7 @@ export class BinanceTradeAnalist {
             signal = 'BUY';
             if (!this.trade || !this.trade.isOpen()) {
                 this.trade = new Trade(this.symbol, price);
+                this.trade.setActualPrice(price);
             }
         }
 
@@ -68,7 +69,6 @@ export class BinanceTradeAnalist {
             signal = 'SELL';
             if (this.trade?.isOpen()) {
                 this.trade.sell(price);
-                this.trade.sendTradeMessage();
             }
         }
 

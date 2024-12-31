@@ -11,12 +11,16 @@ class Trade {
     private open = true;
     private telegramBot: TelegramBot;
 
-    constructor(symbol: string, buyPrice: number) {
+    constructor(symbol: string, buyPrice: number, id?: number) {
         this.buyPrice = buyPrice;
         this.symbol = symbol;
         this.buyDate = new Date();
         this.telegramBot = TelegramBot.getInstance();
         this.save();
+    }
+
+    public getSymbol() {
+        return this.symbol;
     }
 
     setTradeFromDb(result: { id: number; symbol: string; buyPrice: number; sellPrice: number; buyDate: string; sellDate?: string; open: number; }) {
@@ -32,19 +36,11 @@ class Trade {
     public async save() {
         const dbInstance = await DatabaseSingleton.getInstance();
         const db = dbInstance.getDb();
-        if (this.id) {
-            console.log('Updating trade');
-            db.run(
-                'UPDATE trades SET symbol = ?, buyPrice = ?, sellPrice = ?, buyDate = ?, sellDate = ?, open = ? WHERE id = ?',
-                this.symbol, this.buyPrice, this.sellPrice, this.buyDate.getTime(), this.sellDate?.getTime(), this.open ? 1 : 0, this.id
-            );
-        } else {
-            console.log('Inserting new trade');
+        if (this.buyDate && this.symbol) {
             const result = await db.run(
-                'INSERT INTO trades ( symbol, buyPrice, sellPrice, buyDate, sellDate, open) VALUES (?, ?, ?, ?, ?, ?)',
+                'INSERT OR REPLACE INTO trades(symbol, buyPrice, sellPrice, buyDate, sellDate, open) VALUES(?, ?, ?, ?, ?, ?)',
                 this.symbol, this.buyPrice, this.sellPrice, this.buyDate.getTime(), this.sellDate?.getTime(), this.open ? 1 : 0
             );
-            this.id = result.lastID;
         }
     }
 
@@ -56,7 +52,7 @@ class Trade {
     public sell(sellPrice: number) {
         if (this.open) {
             const result = sellPrice / this.buyPrice;
-            if (result < 0.99 || result > 1.005) {
+            if (result < 0.99 || result > 1.007) {
                 this.sellPrice = sellPrice;
                 this.sellDate = new Date();
                 this.open = false;
@@ -88,10 +84,10 @@ class Trade {
         const buyPriceFormatted = this.buyPrice.toFixed(8);
         const sellPriceFormatted = this.sellPrice ? this.sellPrice.toFixed(8) : 'N/A';
         const resultFormatted = ((this.getResult() - 1) * 100).toFixed(2);
-        let message = `SYMBOL_: ${this.symbol.toUpperCase()}\n`;
-        message += `BUY____: ${buyDateFormatted} ${buyPriceFormatted}\n`;
-        message += `SELL___: ${sellDateFormatted} ${sellPriceFormatted}\n`;
-        message += `P/L____: ${resultFormatted}% \n`;
+        let message = `SYMBOL.: ${this.symbol.toUpperCase()}\n`;
+        message += `BUY....: ${buyDateFormatted} ${buyPriceFormatted}\n`;
+        message += `SELL...: ${sellDateFormatted} ${sellPriceFormatted}\n`;
+        message += `P/L....: ${resultFormatted}% \n\n`;
         return message;
     }
 

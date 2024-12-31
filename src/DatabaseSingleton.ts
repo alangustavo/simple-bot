@@ -32,13 +32,13 @@ class DatabaseSingleton {
 
             await this.db.exec(`
                 CREATE TABLE IF NOT EXISTS trades (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    symbol TEXT NOT NULL,
-                    buyPrice REAL NOT NULL,
-                    sellPrice REAL,
-                    buyDate INTEGER NOT NULL,
-                    sellDate INTEGER,
-                    open INTEGER NOT NULL
+                    "buyDate"	INTEGER NOT NULL,
+                    "symbol"	TEXT NOT NULL,
+                    "buyPrice"	REAL NOT NULL,
+                    "sellPrice"	REAL,
+                    "sellDate"	INTEGER,
+                    "open"	INTEGER NOT NULL,
+                    PRIMARY KEY("buyDate","symbol")
                 )
             `);
 

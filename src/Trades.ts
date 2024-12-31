@@ -1,4 +1,5 @@
 import DatabaseSingleton from "./DatabaseSingleton";
+import TelegramBot from "./TelegramBot";
 import Trade from "./Trade";
 
 export default class Trades {
@@ -21,7 +22,7 @@ export default class Trades {
             console.error('Database not initialized in getOpenTrades');
             throw new Error('Database not initialized');
         }
-        const results = await db.all('SELECT * FROM trades WHERE open = 1 ORDER BY symbol');
+        const results = await db.all('SELECT * FROM trades WHERE open = 1 ORDER BY buyDate');
         for (const result of results) {
             const trade = new Trade(result.symbol, result.buyPrice);
             trade.setTradeFromDb(result);
@@ -30,19 +31,19 @@ export default class Trades {
         return trades;
     }
 
-    public async getLastOpenTrade(symbol: string): Promise<Trade | null> {
+    public async getLastOpenTrade(): Promise<Trade | null> {
         const dbInstance = await DatabaseSingleton.getInstance();
         const db = dbInstance.getDb();
         if (!db) {
             console.error('Database not initialized in getLastOpenTrade');
             throw new Error('Database not initialized');
         }
-        const result = await db.get('SELECT * FROM trades WHERE symbol = ? AND open = 1 LIMIT 1', symbol);
+        const result = await db.get('SELECT * FROM trades WHERE open = 1 LIMIT 1');
         if (!result) {
-            console.warn(`No open trade found for symbol: ${symbol}`);
+            console.warn("No open trade found");
             return null;
         }
-        const trade = new Trade(result.symbol, result.buyPrice);
+        const trade = new Trade(result.symbol, result.buyPrice, result.id);
         trade.setTradeFromDb(result);
         return trade;
     }
@@ -54,16 +55,22 @@ export default class Trades {
             console.error('Database not initialized in getTradesPartialResume');
             throw new Error('Database not initialized');
         }
-        const results = await db.all('SELECT * FROM trades WHERE open = 1 ORDER BY symbol');
-        let message = 'ESTADO DAS ORDENS ABERTAS:\n';
+        const results = await db.all('SELECT * FROM trades WHERE open = 1 ORDER BY buyDate');
+        this.sendMessagesToTelegram('ESTADO DAS ORDENS ABERTAS:\n');
         let result = 1;
         for (const res of results) {
             const trade = new Trade(res.symbol, res.buyPrice);
             trade.setTradeFromDb(res);
-            message += await trade.getTradeMessage();
+            await this.sendMessagesToTelegram(await trade.getTradeMessage());
             result *= trade.getResult();
         }
-        return message;
+        result = (result - 1) * 100;
+        return `\nRESULTADO PARCIAL: ${result.toFixed(2)}%`;
+    }
+
+    public async sendMessagesToTelegram(message: string) {
+        const telegramBot = TelegramBot.getInstance();
+        await telegramBot.sendMarkDownMessage(message);
     }
 
     public async getTradesResults() {
@@ -73,22 +80,22 @@ export default class Trades {
             console.error('Database not initialized in getTradesResults');
             throw new Error('Database not initialized');
         }
-        const results = await db.all('SELECT * FROM trades WHERE open = 0 ORDER BY symbol');
+        const results = await db.all('SELECT * FROM trades WHERE open = 0 ORDER BY buyDate');
         let message = 'RESULTADO DO BOT:\n';
         let symbol = '';
         let result = 1;
         for (const res of results) {
             if (res.symbol !== symbol) {
                 symbol = res.symbol;
-                message += `\nSYMBOL\\.: ${res.symbol}:\n`;
+                message += `\nSYMBOL.: ${res.symbol}:\n`;
             }
             const trade = new Trade(res.symbol, res.buyPrice);
             trade.setTradeFromDb(res);
-            message += trade.getTradeMessage();
+            await this.sendMessagesToTelegram(await trade.getTradeMessage());
             result *= trade.getResult();
         }
         result = (result - 1) * 100;
-        return `${message}\nRESULTADO: ${result.toFixed(2)}%`;
+        return `\nRESULTADO: ${result.toFixed(2)}%`;
     }
 
 }

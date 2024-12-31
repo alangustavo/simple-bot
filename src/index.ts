@@ -1,17 +1,27 @@
 import { Interval } from "@binance/connector-typescript";
-import Kline from "./Kline";
 import TelegramBot from "./TelegramBot";
 import DatabaseSingleton from "./DatabaseSingleton";
 import 'dotenv/config';
-import { BinanceTradeAnalist } from "./BinanceTradeAnalist";
 import Trades from "./Trades";
 import { BinanceTradeAlan } from "./BinanceTradeAlan";
+import type { Signal, TradeSignal } from "./types";
+import Trade from "./Trade";
+type Status = 'COMPRADO' | 'VENDIDO';
 
 async function main() {
+    let status: Status;
     const db = await DatabaseSingleton.getInstance();
     const traders = await Trades.getInstance();
     const telegraf = TelegramBot.getInstance();
     const telegramBot = telegraf.getBot();
+
+    const trades = await Trades.getInstance();
+    let trade = await trades.getLastOpenTrade();
+    if (trade) {
+        status = 'COMPRADO';
+    } else {
+        status = 'VENDIDO';
+    }
 
     // Register commands
     telegramBot.command('resultados', async (ctx) => {
@@ -24,6 +34,11 @@ async function main() {
         console.log('parcial command');
         const message = await traders.getTradesPartialResume();
         ctx.reply(`<code>${message}</code>`, { parse_mode: 'HTML' });
+    });
+
+
+    telegramBot.command('status', async (ctx) => {
+        ctx.reply(`<code>${status}</code>`, { parse_mode: 'HTML' });
     });
 
     // Start the bot
@@ -58,18 +73,46 @@ async function main() {
         "WINUSDT",
         "XLMUSDT"
     ];
-    const analists: BinanceTradeAnalist[] = [];
+
     const alans: BinanceTradeAlan[] = [];
     for (const crypto of cryptos) {
-        analists.push(new BinanceTradeAnalist(crypto, Interval['1h']));
-        alans.push(new BinanceTradeAlan(crypto, Interval['1h']));
+        alans.push(new BinanceTradeAlan(crypto, Interval['3m']));
     }
-
-    setInterval(() => {
-        for (const trader of analists) {
-            trader.getTradingSignal();
+    const signalMap = new Map<string, TradeSignal>();
+    setInterval(async () => {
+        for (const trader of alans) {
+            const tradeSignal = await trader.getTradingSignal();
+            signalMap.set(trader.getSymbol(), tradeSignal);
+            tradeSignal.resitenceDistance;
+            tradeSignal.signal;
         }
+
+        if (status === 'VENDIDO') {
+            const buySignals = Array.from(signalMap.values()).filter(signal => signal.signal === 'BUY');
+            if (buySignals.length > 0) {
+                status = 'COMPRADO';
+                const bestSignal = buySignals.reduce((prev, current) => (prev.resitenceDistance > current.resitenceDistance) ? prev : current);
+                console.log('Best BUY signal:', bestSignal);
+                // Aqui você pode adicionar a lógica para agir com base no melhor sinal de compra
+                trade = new Trade(bestSignal.symbol, bestSignal.price);
+                trade.setActualPrice(bestSignal.price);
+                await trade.save();
+            }
+        } else if (status === 'COMPRADO' && trade) {
+            const sellSignal = signalMap.get(trade.getSymbol());
+            if (sellSignal && sellSignal.price > 0) {
+                trade.setActualPrice(sellSignal.price);
+            }
+            if (sellSignal?.signal === 'SELL') {
+                trade.sell(sellSignal.price);
+                if (!trade.isOpen()) {
+                    status = 'VENDIDO';
+                }
+            }
+        }
+
     }, 60 * 1000);
 }
+
 
 main();
