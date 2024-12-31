@@ -1,64 +1,67 @@
 import { Interval } from "@binance/connector-typescript";
-import Balance from "./Balance";
 import Kline from "./Kline";
-import BinanceClientSingleton from "./BinanceClientSingleton";
-import VolatilityMonitor from "./VolatilityMonitor";
+import TelegramBot from "./TelegramBot";
+import DatabaseSingleton from "./DatabaseSingleton";
+import 'dotenv/config';
+import { BinanceTradeAnalist } from "./BinanceTradeAnalist";
+import Trades from "./Trades";
+import { BinanceTradeAlan } from "./BinanceTradeAlan";
 
 async function main() {
-    // const kline = new Kline('BTCUSDT', Interval['1m'], 4);
+    const db = await DatabaseSingleton.getInstance();
+    const traders = await Trades.getInstance();
+    const telegraf = TelegramBot.getInstance();
+    const telegramBot = telegraf.getBot();
 
-    // const stream = BinanceKlineStream.getInstance();
-    // stream.addObserver(kline);
+    // Register commands
+    telegramBot.command('resultados', async (ctx) => {
+        console.log('resultados command');
+        const message = await traders.getTradesResults();
+        ctx.reply(`<code>${message}</code>`, { parse_mode: 'HTML' });
+    });
 
+    telegramBot.command('parcial', async (ctx) => {
+        console.log('parcial command');
+        const message = await traders.getTradesPartialResume();
+        ctx.reply(`<code>${message}</code>`, { parse_mode: 'HTML' });
+    });
 
-    const client = BinanceClientSingleton.getInstance();
-    // const accountInfo = await client.accountInformation();
-    // console.log(accountInfo);
+    // Start the bot
+    telegramBot.launch().then(() => {
+        console.log('Bot started');
+    }).catch((error) => {
+        console.error('Failed to start bot:', error);
+    });
 
-    // const balance = new Balance();
+    const cryptos = [
+        "SOLUSDT",
+        "RLCUSDT",
+        "LITUSDT",
+        "ATAUSDT",
+        "IDEXUSDT",
+        "SCRTUSDT",
+        "STEEMUSDT",
+        "MDTUSDT",
+        "OGNUSDT",
+        "UTKUSDT",
+        "BEAMXUSDT",
+        "BTCUSDT",
+        "LINKUSDT",
+        "ENAUSDT",
+        "SXPUSDT",
+        "ADAUSDT"];
+    const analists: BinanceTradeAnalist[] = [];
+    const alans: BinanceTradeAlan[] = [];
+    for (const crypto of cryptos) {
+        analists.push(new BinanceTradeAnalist(crypto, Interval['1h']));
+        alans.push(new BinanceTradeAlan(crypto, Interval['1h']));
+    }
 
-    // console.log(await balance.getBalances());
-    // const balance = new Balance();
-    // console.log(await balance.getBalances());
-
-    // setInterval(async () => {
-    //     console.log('Updating balances...');
-    //     console.log(await balance.getBalances());
-    // }, 2 * 60 * 1000); // 2 minutes interval
-    // const tickers = await client.ticker24hr({ type: 'MINI' });
-    // console.log(tickers);
-
-    // const monitor = new VolatilityMonitor('USDT', 20000000, Interval['15m'], 200);
-    // await monitor.updateSymbols();
-
-    // setInterval(async () => {
-    //     await monitor.updateSymbols();
-    // }, 60 * 60 * 1000); // 1 hour interval
-    const SOL = new Kline('SOLUSDT', Interval['15m'], 200);
-    const RLC = new Kline('RLCUSDT', Interval['15m'], 200);
-    const LIT = new Kline('LITUSDT', Interval['15m'], 200);
-    const ATA = new Kline('ATAUSDT', Interval['15m'], 200);
-    const IDEX = new Kline('IDEXUSDT', Interval['15m'], 200);
-    const SCRT = new Kline('SCRTUSDT', Interval['15m'], 200);
-    const STEEM = new Kline('STEEMUSDT', Interval['15m'], 200);
-    const MDT = new Kline('MDTUSDT', Interval['15m'], 200);
-    const OGN = new Kline('OGNUSDT', Interval['15m'], 200);
-    const UTK = new Kline('UTKUSDT', Interval['15m'], 200);
     setInterval(() => {
-        SOL.getTradingSignal();
-        RLC.getTradingSignal();
-        LIT.getTradingSignal();
-        ATA.getTradingSignal();
-        IDEX.getTradingSignal();
-        SCRT.getTradingSignal();
-        STEEM.getTradingSignal();
-        MDT.getTradingSignal();
-        OGN.getTradingSignal();
-        UTK.getTradingSignal();
-    }, 60 * 1000); // 1 minute interval
-    // setInterval(() => {
-    //     monitor.evaluateSymbols();
-    // }, 60 * 1000); // 1 minute interval
+        for (const trader of analists) {
+            trader.getTradingSignal();
+        }
+    }, 60 * 1000);
 }
 
 main();

@@ -2,9 +2,8 @@ import type { Interval } from '@binance/connector-typescript';
 import BinanceClientSingleton from './BinanceClientSingleton';
 import BinanceKlineStream from './BinanceKlineStream';
 import type { ObserverKline, KlineData, Signal } from './types';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import TelegramBot from './TelegramBot';
+
+
 
 class Kline implements ObserverKline {
     public symbol: string;
@@ -12,9 +11,21 @@ class Kline implements ObserverKline {
     public stream: string;
     private limit: number;
     private klines: KlineData[] = [];
-    private lastSignal: Signal = 'BUY';
+    private static instances: Map<string, Kline> = new Map();
 
-    constructor(symbol: string, interval: Interval, limit: number) {
+    public static getInstance(symbol: string, interval: Interval, limit = 500): Kline {
+        const key = `${symbol}_${interval}`;
+        if (!Kline.instances.has(key)) {
+            Kline.instances.set(key, new Kline(symbol, interval, limit));
+        }
+        const instance = Kline.instances.get(key);
+        if (!instance) {
+            throw new Error(`Instance for ${key} not found`);
+        }
+        return instance;
+    }
+
+    private constructor(symbol: string, interval: Interval, limit: number) {
         this.symbol = symbol;
         this.interval = interval;
         this.limit = limit;
@@ -89,100 +100,22 @@ class Kline implements ObserverKline {
     public getKlines(): KlineData[] {
         return this.klines;
     }
-
-    public getPrice() {
-        return this.klines[this.klines.length - 1].close;
-    }
-
-    private calculateMovingAverage(period: number): number {
-        const closes = this.getCloses().slice(-period);
-        return closes.reduce((sum, close) => sum + close, 0) / period;
-    }
-
     public getCloses(): number[] {
         return this.klines.map(kline => kline.close);
     }
-
-    public getTradingSignal(): Signal {
-        const price = this.getPrice();
-        const { support, resistance } = this.calculateSupportResistance();
-        const bands = this.calculateBollingerBands(20);
-        const movingAverage = this.calculateMovingAverage(50);
-
-        let signal: Signal = 'HOLD';
-
-        const isPriceNearSupport1 = price >= support[0] && price <= support[0] * 1.02;
-        const isPriceNearSupport2 = price >= support[1] && price <= support[1] * 1.02;
-        const isBelowLowerBand = price < bands.lower;
-        const isPriceAboveMA = price > movingAverage;
-
-        if ((isPriceNearSupport1 || isPriceNearSupport2) && (isBelowLowerBand || isPriceAboveMA)) {
-            signal = 'BUY';
+    public getPrice() {
+        if (this.klines.length === 0) {
+            throw new Error('No klines available');
         }
-
-        const isPriceNearResistance1 = price <= resistance[0] && price >= resistance[0] * 0.98;
-        const isPriceNearResistance2 = price <= resistance[1] && price >= resistance[1] * 0.98;
-        const isAboveUpperBand = price > bands.upper;
-
-        if ((isPriceNearResistance1 || isPriceNearResistance2) && isAboveUpperBand) {
-            signal = 'SELL';
-        }
-
-        if (this.lastSignal !== signal) {
-            this.lastSignal = signal;
-            const telegram = TelegramBot.getInstance();
-            const chatId = process.env.TELEGRAM_CHAT_ID;
-            if (chatId) {
-                telegram.sendMessage(chatId, `${process.env.COMPUTER}: Trading signal for ${this.symbol}_${this.interval}: ${signal} ${price}`);
-            } else {
-                console.error('TELEGRAM_CHAT_ID is not defined');
-            }
-        }
-        const dateTime = new Date().toISOString();
-        const csvFilePath = path.join(__dirname, `${this.symbol}_${this.interval}.csv`);
-        const csvHeader = 'Date,Current Price,Support1,Support2,Resistance1,Resistance2,Upper Band,Lower Band,Moving Average,Signal\n';
-
-        if (!fs.existsSync(csvFilePath)) {
-            fs.writeFileSync(csvFilePath, csvHeader);
-        }
-        const csvRow = `${dateTime},${price},${support[0]},${support[1]},${resistance[0]},${resistance[1]},${bands.upper},${bands.lower},${movingAverage},${signal}\n`;
-        fs.appendFileSync(csvFilePath, csvRow);
-
-        return signal;
+        return this.klines[this.klines.length - 1].close;
     }
-
-    private calculateSupportResistance(): { support: number[]; resistance: number[]; } {
-        const highs = this.getHighs();
-        const lows = this.getLows();
-
-        const support = [
-            Math.min(...lows.slice(-10)), // Support1 from the last 10 klines
-            Math.min(...lows.slice(-20, -10)) // Support2 from the last 20 to 10 klines
-        ];
-        const resistance = [
-            Math.max(...highs.slice(-10)), // Resistance1 from the last 10 klines
-            Math.max(...highs.slice(-20, -10)) // Resistance2 from the last 20 to 10 klines
-        ];
-
-        return { support, resistance };
-    }
-
-    calculateBollingerBands(period: number): { upper: number; lower: number; } {
-        const closes = this.getCloses().slice(-period);
-        const mean = closes.reduce((sum, close) => sum + close, 0) / period;
-
-        const stddev = Math.sqrt(closes.map((close) => (close - mean) ** 2).reduce((a, b) => a + b, 0) / period);
-
-        return { upper: mean + 2 * stddev, lower: mean - 2 * stddev };
-    }
-
     public getHighs(): number[] {
         return this.klines.map(kline => kline.high);
     }
-
     public getLows(): number[] {
         return this.klines.map(kline => kline.low);
     }
+
 }
 
 export default Kline;
