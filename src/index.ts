@@ -34,22 +34,30 @@ async function main() {
     });
 
     const cryptos = [
-        "SOLUSDT",
-        "RLCUSDT",
-        "LITUSDT",
+        "ADAUSDT",
+        "ARBUSDT",
         "ATAUSDT",
+        "AVAUSDT",
+        "BEAMXUSDT",
+        "BNBUSDT",
+        "BTCUSDT",
+        "ENAUSDT",
         "IDEXUSDT",
-        "SCRTUSDT",
-        "STEEMUSDT",
+        "IOTAUSDT",
+        "LINKUSDT",
+        "LITUSDT",
+        "MBOXUSDT",
         "MDTUSDT",
         "OGNUSDT",
-        "UTKUSDT",
-        "BEAMXUSDT",
-        "BTCUSDT",
-        "LINKUSDT",
-        "ENAUSDT",
+        "RLCUSDT",
+        "SCRTUSDT",
+        "SOLUSDT",
+        "STEEMUSDT",
         "SXPUSDT",
-        "ADAUSDT"];
+        "UTKUSDT",
+        "WINUSDT",
+        "XLMUSDT"
+    ];
     const analists: BinanceTradeAnalist[] = [];
     const alans: BinanceTradeAlan[] = [];
     for (const crypto of cryptos) {
