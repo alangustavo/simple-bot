@@ -20,7 +20,7 @@ export type Signal = 'BUY' | 'SELL' | 'HOLD';
 export interface TradeSignal {
     symbol: string;
     signal: Signal;
-    resitenceDistance: number;
+    bbUpperDistance: number;
     price: number;
 }
 

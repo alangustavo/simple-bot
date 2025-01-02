@@ -1,5 +1,6 @@
 import TelegramBot from './TelegramBot';
 import DatabaseSingleton from './DatabaseSingleton';
+import BinanceCryptoInfo from './BinanceCryptoInfo';
 
 class Trade {
     private id?: number;
@@ -66,6 +67,10 @@ class Trade {
         return this.open;
     }
 
+    public getBuyPrice() {
+        return this.buyPrice;
+    }
+
     public getResult() {
         if (this.sellPrice !== undefined) {
             return this.sellPrice / this.buyPrice;
@@ -79,16 +84,29 @@ class Trade {
     };
 
     public async getTradeMessage() {
+
+        const dec1 = this.getDecimalPlacesFromString(this.buyPrice.toString());
+        const dec2 = this.getDecimalPlacesFromString(this.sellPrice.toString());
+        const fixed = Math.max(dec1, dec2);
+        const symbolInfo = await BinanceCryptoInfo.getInstance().getSymbolInfo(this.symbol);
         const buyDateFormatted = this.formatDate(this.buyDate);
-        const sellDateFormatted = this.sellDate ? this.formatDate(this.sellDate) : 'N/A';
-        const buyPriceFormatted = this.buyPrice.toFixed(8);
-        const sellPriceFormatted = this.sellPrice ? this.sellPrice.toFixed(8) : 'N/A';
+        const sellDateFormatted = this.sellDate ? this.formatDate(this.sellDate) : 'N/A        ';
+        const buyPriceFormatted = this.buyPrice.toFixed(fixed);
+        const sellPriceFormatted = this.sellPrice ? this.sellPrice.toFixed(fixed) : 'N/A        ';
         const resultFormatted = ((this.getResult() - 1) * 100).toFixed(2);
+        const emoji = this.getResult() > 1 ? "😀" : "😮";
         let message = `SYMBOL.: ${this.symbol.toUpperCase()}\n`;
         message += `BUY....: ${buyDateFormatted} ${buyPriceFormatted}\n`;
         message += `SELL...: ${sellDateFormatted} ${sellPriceFormatted}\n`;
-        message += `P/L....: ${resultFormatted}% \n\n`;
+        message += `P/L....: ${resultFormatted}% ${emoji}\n\n`;
+        console.log(message);
         return message;
+    }
+
+    getDecimalPlacesFromString(numStr: string): number {
+        const decimalIndex = numStr.indexOf('.');
+        if (decimalIndex === -1) return 0;
+        return numStr.length - decimalIndex - 1;
     }
 
     public async sendTradeMessage() {

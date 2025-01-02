@@ -10,7 +10,9 @@ export default class Trades {
     public static async getInstance(): Promise<Trades> {
         if (!Trades.instance) {
             Trades.instance = new Trades();
+            console.log('Trades instance created');
         }
+
         return Trades.instance;
     }
 
@@ -45,6 +47,7 @@ export default class Trades {
         }
         const trade = new Trade(result.symbol, result.buyPrice, result.id);
         trade.setTradeFromDb(result);
+        console.log('Trade found:', trade.getSymbol(), trade.getBuyPrice());
         return trade;
     }
 
@@ -56,7 +59,7 @@ export default class Trades {
             throw new Error('Database not initialized');
         }
         const results = await db.all('SELECT * FROM trades WHERE open = 1 ORDER BY buyDate');
-        this.sendMessagesToTelegram('ESTADO DAS ORDENS ABERTAS:\n');
+        // this.sendMessagesToTelegram('ESTADO DAS ORDENS ABERTAS:\n');
         let result = 1;
         for (const res of results) {
             const trade = new Trade(res.symbol, res.buyPrice);
@@ -65,7 +68,8 @@ export default class Trades {
             result *= trade.getResult();
         }
         result = (result - 1) * 100;
-        return `\nRESULTADO PARCIAL: ${result.toFixed(2)}%`;
+        return "\n";
+        // return `\nRESULTADO PARCIAL: ${result.toFixed(2)}%`;
     }
 
     public async sendMessagesToTelegram(message: string) {
@@ -73,7 +77,7 @@ export default class Trades {
         await telegramBot.sendMarkDownMessage(message);
     }
 
-    public async getTradesResults() {
+    public async getTradesResults(list = true) {
         const dbInstance = await DatabaseSingleton.getInstance();
         const db = dbInstance.getDb();
         if (!db) {
@@ -91,8 +95,11 @@ export default class Trades {
             }
             const trade = new Trade(res.symbol, res.buyPrice);
             trade.setTradeFromDb(res);
-            await this.sendMessagesToTelegram(await trade.getTradeMessage());
             result *= trade.getResult();
+            if (list) {
+                await this.sendMessagesToTelegram(await trade.getTradeMessage());
+            }
+
         }
         result = (result - 1) * 100;
         return `\nRESULTADO: ${result.toFixed(2)}%`;

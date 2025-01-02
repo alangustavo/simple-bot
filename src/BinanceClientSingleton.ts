@@ -12,6 +12,7 @@ class BinanceClientSingleton {
     public static getInstance(): Spot {
         if (!BinanceClientSingleton.instance) {
             BinanceClientSingleton.instance = new Spot(apiKey, apiSecret);
+            console.log('BinanceClient instance created');
         }
         return BinanceClientSingleton.instance;
     }

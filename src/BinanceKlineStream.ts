@@ -25,6 +25,7 @@ class BinanceKlineStream implements Observable {
     public static getInstance(): BinanceKlineStream {
         if (!BinanceKlineStream.instance) {
             BinanceKlineStream.instance = new BinanceKlineStream();
+            console.log('BinanceKlineStream instance created');
         }
         return BinanceKlineStream.instance;
     }

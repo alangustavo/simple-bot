@@ -18,7 +18,9 @@ class TelegramBot {
     public static getInstance(): TelegramBot {
         if (!TelegramBot.instance) {
             TelegramBot.instance = new TelegramBot();
+            console.log('TelegramBot instance created');
         }
+
         return TelegramBot.instance;
     }
 
@@ -45,6 +47,7 @@ class TelegramBot {
     }
 
     public getBot(): Telegraf {
+        console.log('Returning Telegraf instance');
         return this.bot;
     }
 

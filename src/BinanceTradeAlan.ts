@@ -40,24 +40,12 @@ export class BinanceTradeAlan {
         try {
             price = this.kline.getPrice();
         } catch (error) {
-            console.error(`Failed to get price for ${this.getName()}:`, error);
-            tradeSignal = {
-                symbol: this.symbol,
-                signal: 'HOLD',
-                resitenceDistance: 0,
-                price: 0
-            };
-            return tradeSignal;
-        }
-        try {
-            price = await this.kline.getPrice();
-        } catch (error) {
             console.error(`Failed to get price for ${this.symbol}_${this.interval}:`, error);
             return {
                 symbol: this.symbol,
                 price: 0,
                 signal: 'HOLD',
-                resitenceDistance: 0
+                bbUpperDistance: 0
             };
         }
         const { support, resistance } = this.calculateSupportResistance();
@@ -75,7 +63,7 @@ export class BinanceTradeAlan {
 
         const isPriceNearResistance1 = price <= resistance[0] && price >= resistance[0] * 0.995; // Ajuste para 0.995
         const isPriceNearResistance2 = price <= resistance[1] && price >= resistance[1] * 0.995; // Ajuste para 0.995
-        const resitenceDistance = (((resistance[0] + resistance[1]) / 2) / price);
+        const bbUperDistance = (bands.upper / price);
 
         const isBetweenMiddleAndUpper = price > bands.middle && price < bands.upper;
 
@@ -83,11 +71,11 @@ export class BinanceTradeAlan {
         const isPriceAboveMA = price > movingAverage;
         const isBetweenLowerAndMiddle = price > bands.lower && price < bands.middle;
         let signal: Signal = 'HOLD';
-        tradeSignal = { symbol: this.symbol, signal: 'HOLD', resitenceDistance: resitenceDistance, price };
+        tradeSignal = { symbol: this.symbol, signal: 'HOLD', bbUpperDistance: bbUperDistance, price };
 
         if ((isPriceNearSupport1 || isPriceNearSupport2) && (isBelowLowerBand || isPriceAboveMA) && (isBetweenLowerAndMiddle)) {
             signal = 'BUY';
-            tradeSignal = { symbol: this.symbol, signal: 'BUY', resitenceDistance: resitenceDistance, price };
+            tradeSignal = { symbol: this.symbol, signal: 'BUY', bbUpperDistance: bbUperDistance, price };
             // if (!this.trade || !this.trade.isOpen()) {
             //     this.trade = new Trade(this.symbol, price);
             // }
@@ -96,7 +84,7 @@ export class BinanceTradeAlan {
 
         if ((isPriceNearResistance1 || isPriceNearResistance2) && (isBetweenMiddleAndUpper)) {
             signal = 'SELL';
-            tradeSignal = { symbol: this.symbol, signal: 'SELL', resitenceDistance: resitenceDistance, price };
+            tradeSignal = { symbol: this.symbol, signal: 'SELL', bbUpperDistance: bbUperDistance, price };
             // if (this.trade?.isOpen()) {
             //     this.trade.sell(price);
             //     this.trade.sendTradeMessage();
@@ -106,12 +94,12 @@ export class BinanceTradeAlan {
         if (this.lastSignal !== signal && signal !== 'HOLD') {
             this.lastSignal = signal;
             const telegram = TelegramBot.getInstance();
-            telegram.sendMessage(`${process.env.COMPUTER}:Trade_Alan ${this.getName()}: ${signal} ${price}`);
+            // telegram.sendMessage(`${process.env.COMPUTER}:Trade_Alan ${this.getName()}: ${signal} ${price}`);
         }
         const dateTime = new Date().toISOString();
         const csvFileName = `${this.getName()}.csv`;
-        const csvHeader = 'Date,Current Price,Support1,Support2,Resistance1,Resistance2,Upper Band,Lower Band,Moving Average,Signal\n';
-        const csvRow = `${dateTime},${price},${support[0]},${support[1]},${resistance[0]},${resistance[1]},${bands.upper},${bands.lower},${movingAverage},${signal}\n`;
+        const csvHeader = 'Date,Current Price,Support1,Support2,Resistance1,Resistance2,Upper Band,Lower Band,Moving Average,bbUperDistance,Signal\n';
+        const csvRow = `${dateTime},${price},${support[0]},${support[1]},${resistance[0]},${resistance[1]},${bands.upper},${bands.lower},${movingAverage},${bbUperDistance},${signal}\n`;
         this.csvWriter.writeCsv(csvFileName, csvHeader, csvRow);
 
         return tradeSignal;

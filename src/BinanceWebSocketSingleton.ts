@@ -22,6 +22,7 @@ class BinanceWebSocketSingleton {
             }
         };
         if (!BinanceWebSocketSingleton.instance) {
+            console.log('BinanceWebSocketSingleton: Criando nova instância');
             BinanceWebSocketSingleton.instance = new WebsocketAPI(process.env.BINANCE_API_KEY || '', process.env.BINANCE_API_SECRET || '', { callbacks });
         }
 
