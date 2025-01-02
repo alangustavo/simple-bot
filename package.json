@@ -2,7 +2,6 @@
   "name": "simple-bot",
   "version": "1.0.0",
   "description": "A simple bot",
-  "main": "dist/bot.js",
   "scripts": {
     "build": "tsc",
     "start": "npm install && ts-node src/index.ts",
