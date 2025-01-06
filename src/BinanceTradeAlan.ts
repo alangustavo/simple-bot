@@ -58,8 +58,8 @@ export class BinanceTradeAlan {
         // }
 
 
-        const isPriceNearSupport1 = price >= support[0] && price <= support[0] * 1.005; // Ajuste para 1.005
-        const isPriceNearSupport2 = price >= support[1] && price <= support[1] * 1.01; // Ajuste para 1.01
+        const isPriceNearSupport1 = price >= support[0] && price <= support[0] * 1.0025; // Ajuste para 1.0025
+        const isPriceNearSupport2 = price >= support[1] && price <= support[1] * 1.005; // Ajuste para 1.005
 
         const isPriceNearResistance1 = price <= resistance[0] && price >= resistance[0] * 0.995; // Ajuste para 0.995
         const isPriceNearResistance2 = price <= resistance[1] && price >= resistance[1] * 0.995; // Ajuste para 0.995

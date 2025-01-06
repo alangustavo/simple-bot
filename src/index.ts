@@ -57,16 +57,29 @@ async function main() {
     const stopLoss = (maxPrice * 0.99).toFixed(dec);
     telegramBot.command('t', async (ctx) => {
         console.log('trailing stop command');
-
-
         if (trailingStop) {
             if (trade) {
-                await sendMessagesToTelegram(`Trailling Stop Ativo: ${trailingStop}\nPreço Máximo........: ${maxPrice.toFixed(dec)}\nStop Loss...........: ${stopLoss}\nP/L Estimado........: ${((maxPrice * 0.99) / trade.getBuyPrice() - 1).toFixed(2)}%`);
+                await sendMessagesToTelegram(
+                    `Trailing Stop Ativo.: ${trailingStop ? 'SIM' : 'NÃO'}
+                    Preço Compra........: ${trade.getBuyPrice()}
+                    Preço Atual.........: ${trade.getSellPrice()}
+                    Trailing Stop.......: ${(maxPrice * 0.99).toFixed(dec)}
+                    Trailing %..........: -1.00%
+                    P/L Estimado........: ${(((maxPrice * 0.99) / trade.getBuyPrice() - 1) * 100).toFixed(2)}%`
+                );
             } else {
-                await sendMessagesToTelegram(`Trailling Stop Ativo: ${trailingStop}\nPreço Máximo........: ${maxPrice.toFixed(dec)}\nStop Loss...........: ${stopLoss}\nP/L Estimado........: N/A\nTent Novamente!`);
+                await sendMessagesToTelegram(
+                    `Trailing Stop Ativo.: ${trailingStop ? 'SIM' : 'NÃO'}
+                    Preço Compra........: N/A
+                    Preço Atual.........: N/A
+                    Trailing Stop.......: ${(maxPrice * 0.99).toFixed(dec)}
+                    Trailing %..........: -1.00%
+                    P/L Estimado........: N/A
+                    Tente novamente!`
+                );
             }
         } else {
-            await sendMessagesToTelegram(`Trailling Stop Ativo: ${trailingStop}\n`);
+            await sendMessagesToTelegram(`Trailing Stop Ativo.: ${trailingStop ? 'SIM' : 'NÃO'}`);
         }
     });
 
@@ -106,13 +119,13 @@ async function main() {
         const uptimeMs = (new Date()).getTime() - date.getTime();
         const uptimeHours = Math.floor(uptimeMs / (1000 * 60 * 60));
         const uptimeMinutes = String(Math.floor((uptimeMs % (1000 * 60 * 60)) / (1000 * 60))).padStart(2, '0');
-        const message = `
-        Status.......: ${icon} ${status}\n
-        Computador...: ${computador?.toUpperCase()}\n
-        Intervalo....: ${intervalo}\n
-        Tempo Ativo..: ${uptimeHours}:${uptimeMinutes}\n
-        Trailing Stop: ${trailingStop ? 'SIM' : 'NÃO'}\n        
-        Notificações.: ${info ? 'SIM' : 'NÃO'}`;
+        const message =
+            `           Status.......: ${icon} ${status}
+                        Computador...: ${computador?.toUpperCase()}
+                        Intervalo....: ${intervalo}
+                        Tempo Ativo..: ${uptimeHours}:${uptimeMinutes}
+                        Trailing Stop: ${trailingStop ? 'SIM' : 'NÃO'}       
+                        Notificações.: ${info ? 'SIM' : 'NÃO'}`;
         await sendMessagesToTelegram(`${message}`);
     });
 
@@ -176,7 +189,6 @@ async function main() {
             }
         } else if (status === 'COMPRADO' && trade) {
             if (info) {
-                console.log('Sending Trade message');
                 await traders.getTradesPartialResume();
             }
             const sellSignal = signalMap.get(trade.getSymbol());
@@ -184,29 +196,29 @@ async function main() {
                 trade.setActualPrice(sellSignal.price);
                 csvComprado(sellSignal, trade);
             }
-            // Se o resultado for maior que 2% ativa o trailing stop
+            // Se o resultado for maior que 2% ativa o trailing stop e ajusta os preços
             if (trade.getResult() > 1.02 && sellSignal && sellSignal.price > 0) {
+                const oldMaxPrice = maxPrice;
                 trailingStop = true;
-                maxPrice = sellSignal.price;
-                telegraf.sendMessage(`O Trailing Stop foi ajustao. Se o preço cair abaixo de ${stopLoss} o trailing stop vai disparar uma venda`);
+                maxPrice = maxPrice > sellSignal.price ? maxPrice : sellSignal.price;
+                if (oldMaxPrice !== maxPrice) {
+                    const message =
+                        `   Trailing Stop Ativo.: ${trailingStop ? 'SIM' : 'NÃO'}
+                            Preço Compra........: ${trade.getBuyPrice()}
+                            Preço Atual.........: ${trade.getSellPrice()}
+                            Trailing Stop.......: ${(maxPrice * 0.99).toFixed(dec)}
+                            Trailing %..........: -1.00%
+                            P/L Estimado........: ${(((maxPrice * 0.99) / trade.getBuyPrice() - 1) * 100).toFixed(2)}%`;
+                    await sendMessagesToTelegram(message);
+                }
+            }
+
+            if (trailingStop && sellSignal && sellSignal.price < maxPrice * 0.99) {
+                await trade.sell(sellSignal.price);
             }
 
             if (sellSignal?.signal === 'SELL') {
-                trade.sell(sellSignal.price);
-            }
-
-            if (trailingStop && sellSignal && sellSignal.price > 0) {
-                if (maxPrice * 0.99 > sellSignal.price) {
-                    telegraf.sendMessage(`O Trailing Stop foi disparado porque o preço atual ${sellSignal.price} é menor que o preço do trailling ${stopLoss}.`);
-                    trade.sell(sellSignal.price);
-                    maxPrice = sellSignal.price;
-                } else {
-                    if (maxPrice < sellSignal.price) {
-                        maxPrice = sellSignal.price;
-                        telegraf.sendMessage(`O Trailing Stop foi ajustao. Se o preço cair abaixo de ${stopLoss} o trailing stop vai disparar uma venda`);
-                    }
-
-                }
+                await trade.sell(sellSignal.price);
             }
             if (!trade.isOpen()) {
                 status = 'VENDIDO';
@@ -226,29 +238,30 @@ async function main() {
 function csvComprado(tradeSignal: TradeSignal, trade: Trade): void {
     const csvWriter = new CsvWriter(path.join(__dirname, 'csv'));
     const dateTime = new Date().toISOString();
-    const csvHeader = 'Date,Symbol,Price,bbUpperDistance,Signal,P/L\n';
-    const csvRow = `${dateTime},${tradeSignal.symbol},${tradeSignal.price},${tradeSignal.bbUpperDistance},${tradeSignal.signal},${trade.getResult()}\n`;
+    const csvHeader = 'Date,Symbol,BuyPrice,ActualPrice,bbUpperDistance,Signal,P/L\n';
+    const csvRow = `${dateTime},${tradeSignal.symbol},${trade.getBuyPrice()},${tradeSignal.price},${tradeSignal.bbUpperDistance},${tradeSignal.signal},${trade.getResult()}\n`;
     csvWriter.writeCsv('comprado.csv', csvHeader, csvRow);
 }
 
 async function help(): Promise<void> {
-    const message = `Liste de comandos:\n
-    /h - Exibe essa mensagem\n
-    /t - Exibe dados do Trailling Stop\n
-    /m - Exibe o preço do Trailling Stop\n
-    /i - Ativa/Desativa as notificações\n
-    /r - Exibe o resultado das operações\n
-    /l - Lista todas as operações\n
-    /p - Exibe a operação atual\n
-    /s - Exibe o status do bot\n
+    const message = `Lista de comandos:
+    /h - Exibe essa mensagem
+    /t - Exibe dados do Trailling Stop
+    /m - Exibe o preço do Trailling Stop
+    /i - Ativa/Desativa as notificações
+    /r - Exibe o resultado das operações
+    /l - Lista todas as operações
+    /p - Exibe a operação atual
+    /s - Exibe o status do bot
     `;
     sendMessagesToTelegram(message);
 };
 
 
 async function sendMessagesToTelegram(message: string) {
+    const m = message.split('\n').map(line => line.replace(/\s+/g, ' ')).join('\n');
     const telegramBot = TelegramBot.getInstance();
-    await telegramBot.sendMarkDownMessage(message);
+    await telegramBot.sendMarkDownMessage(m);
 }
 
 function getDecimalPlacesFromString(numStr: string): number {

@@ -20,6 +20,10 @@ class Trade {
         this.save();
     }
 
+    public getSellPrice() {
+        return this.sellPrice;
+    }
+
     public getSymbol() {
         return this.symbol;
     }
@@ -45,19 +49,19 @@ class Trade {
         }
     }
 
-    public setActualPrice(sellPrice: number) {
+    public async setActualPrice(sellPrice: number) {
         this.sellPrice = sellPrice;
-        this.save();
+        await this.save();
     }
 
-    public sell(sellPrice: number) {
+    public async sell(sellPrice: number) {
         if (this.open) {
             const result = sellPrice / this.buyPrice;
             if (result < 0.99 || result > 1.007) {
                 this.sellPrice = sellPrice;
                 this.sellDate = new Date();
                 this.open = false;
-                this.save();
+                await this.save();
             }
         }
         this.sendTradeMessage();
