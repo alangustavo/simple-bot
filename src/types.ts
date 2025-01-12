@@ -17,11 +17,21 @@ export interface KlineData {
 
 export type Signal = 'BUY' | 'SELL' | 'HOLD';
 
+// export interface TradeSignal {
+//     symbol: string;
+//     signal: Signal;
+//     bbUpperDistance: number;
+//     price: number;
+// }
+
+
 export interface TradeSignal {
     symbol: string;
     signal: Signal;
-    bbUpperDistance: number;
+    shortTermMA: number;
+    longTermMA: number;
     price: number;
+    strength: number;
 }
 
 export interface BalanceData {

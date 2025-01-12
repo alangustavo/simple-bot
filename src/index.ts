@@ -4,10 +4,11 @@ import DatabaseSingleton from "./DatabaseSingleton";
 import 'dotenv/config';
 import path from 'node:path';
 import Trades from "./Trades";
-import { BinanceTradeAlan } from "./BinanceTradeAlan";
+// import { BinanceTradeAlan } from "./BinanceTradeAlan";
 import type { TradeSignal } from "./types";
 import Trade from "./Trade";
 import CsvWriter from "./CsvWriter";
+import { BinanceMarketAnalist } from "./BinanceMarketAnalist";
 type Status = 'COMPRADO' | 'VENDIDO';
 
 async function main() {
@@ -20,7 +21,10 @@ async function main() {
     const telegramBot = telegraf.getBot();
 
     const computador = process.env.COMPUTER;
-    const intervalo = process.env.INTERVALO as keyof typeof Interval || '1h';
+    const intervalo = process.env.INTERVAL as keyof typeof Interval || '1h';
+    let trailingStopActivation = Number(process.env.TRAILING_STOP_ATIVACTION) || 1.01;
+    let trailingStopSellPercent = Number(process.env.TRAILING_STOP_PERCENT) || 0.995;
+    let stopLoss = Number(process.env.STOP_LOSS) || 0.99;
 
     let maxPrice = 0;
     let trailingStop = false;
@@ -54,7 +58,7 @@ async function main() {
         await help();
     });
     const dec = getDecimalPlacesFromString(maxPrice.toString());
-    const stopLoss = (maxPrice * 0.99).toFixed(dec);
+    let trailingStopPrice = (maxPrice * trailingStopSellPercent);
     telegramBot.command('t', async (ctx) => {
         console.log('trailing stop command');
         if (trailingStop) {
@@ -63,8 +67,8 @@ async function main() {
                     `Trailing Stop Ativo.: ${trailingStop ? 'SIM' : 'NÃO'}
                     Preço Compra........: ${trade.getBuyPrice()}
                     Preço Atual.........: ${trade.getSellPrice()}
-                    Trailing Stop.......: ${(maxPrice * 0.99).toFixed(dec)}
-                    Trailing %..........: -1.00%
+                    Trailing Stop.......: ${trailingStopPrice.toFixed(dec)}
+                    Trailing %..........: ${(trailingStopSellPercent - 1)}%
                     P/L Estimado........: ${(((maxPrice * 0.99) / trade.getBuyPrice() - 1) * 100).toFixed(2)}%`
                 );
             } else {
@@ -72,8 +76,8 @@ async function main() {
                     `Trailing Stop Ativo.: ${trailingStop ? 'SIM' : 'NÃO'}
                     Preço Compra........: N/A
                     Preço Atual.........: N/A
-                    Trailing Stop.......: ${(maxPrice * 0.99).toFixed(dec)}
-                    Trailing %..........: -1.00%
+                    Trailing Stop.......: ${trailingStopPrice}
+                    Trailing %..........: ${(trailingStopSellPercent - 1)}%
                     P/L Estimado........: N/A
                     Tente novamente!`
                 );
@@ -163,29 +167,29 @@ async function main() {
         "XLMUSDT"
     ];
 
-    const alans: BinanceTradeAlan[] = [];
+    const marketAnalist: BinanceMarketAnalist[] = [];
     for (const crypto of cryptos) {
-        alans.push(new BinanceTradeAlan(crypto, Interval[intervalo]));
+        marketAnalist.push(new BinanceMarketAnalist(crypto, Interval[intervalo]));
     }
     const signalMap = new Map<string, TradeSignal>();
     setInterval(async () => {
-        for (const trader of alans) {
+        for (const trader of marketAnalist) {
             const tradeSignal = await trader.getTradingSignal();
             signalMap.set(trader.getSymbol(), tradeSignal);
         }
 
         if (status === 'VENDIDO') {
             const buySignals = Array.from(signalMap.values()).filter(signal => signal.signal === 'BUY');
-            if (buySignals.length > 0) {
-                const bestSignal = buySignals.reduce((prev, current) => (prev.bbUpperDistance > current.bbUpperDistance) ? prev : current);
+            if (buySignals.length > 5) {
+                const bestSignal = buySignals.reduce((prev, current) => (prev.strength > current.strength) ? prev : current);
                 console.log('Best BUY signal:', bestSignal);
-                if (bestSignal.bbUpperDistance > 1.01) {
-                    trade = new Trade(bestSignal.symbol, bestSignal.price);
-                    trade.setActualPrice(bestSignal.price);
-                    await trade.save();
-                    status = 'COMPRADO';
-                    await traders.getTradesPartialResume();
-                }
+                trade = new Trade(bestSignal.symbol, bestSignal.price);
+                trade.setActualPrice(bestSignal.price);
+                await trade.save();
+                status = 'COMPRADO';
+                maxPrice = bestSignal.price;
+                await traders.getTradesPartialResume();
+
             }
         } else if (status === 'COMPRADO' && trade) {
             if (info) {
@@ -196,24 +200,25 @@ async function main() {
                 trade.setActualPrice(sellSignal.price);
                 csvComprado(sellSignal, trade);
             }
-            // Se o resultado for maior que 2% ativa o trailing stop e ajusta os preços
-            if (trade.getResult() > 1.02 && sellSignal && sellSignal.price > 0) {
+            // Se o resultado for maior que o trailingStopPercet ativa o trailing stop e ajusta os preços
+            if (trade.getResult() > trailingStopSellPercent && sellSignal && sellSignal.price > 0) {
                 const oldMaxPrice = maxPrice;
                 trailingStop = true;
                 maxPrice = maxPrice > sellSignal.price ? maxPrice : sellSignal.price;
+                trailingStopPrice = (maxPrice * trailingStopSellPercent);
                 if (oldMaxPrice !== maxPrice) {
                     const message =
                         `   Trailing Stop Ativo.: ${trailingStop ? 'SIM' : 'NÃO'}
                             Preço Compra........: ${trade.getBuyPrice()}
                             Preço Atual.........: ${trade.getSellPrice()}
-                            Trailing Stop.......: ${(maxPrice * 0.99).toFixed(dec)}
-                            Trailing %..........: -1.00%
-                            P/L Estimado........: ${(((maxPrice * 0.99) / trade.getBuyPrice() - 1) * 100).toFixed(2)}%`;
+                            Trailing Stop.......: ${trailingStopPrice.toFixed(dec)}
+                            Trailing %..........: ${(trailingStopSellPercent - 1) * 100}%
+                            P/L Estimado........: ${((trailingStopPrice / trade.getBuyPrice() - 1) * 100).toFixed(2)}%`;
                     await sendMessagesToTelegram(message);
                 }
             }
 
-            if (trailingStop && sellSignal && sellSignal.price < maxPrice * 0.99) {
+            if (trailingStop && sellSignal && sellSignal.price < trailingStopPrice) {
                 await trade.sell(sellSignal.price);
             }
 
@@ -238,9 +243,9 @@ async function main() {
 function csvComprado(tradeSignal: TradeSignal, trade: Trade): void {
     const csvWriter = new CsvWriter(path.join(__dirname, 'csv'));
     const dateTime = new Date().toISOString();
-    const csvHeader = 'Date,Symbol,BuyPrice,ActualPrice,bbUpperDistance,Signal,P/L\n';
-    const csvRow = `${dateTime},${tradeSignal.symbol},${trade.getBuyPrice()},${tradeSignal.price},${tradeSignal.bbUpperDistance},${tradeSignal.signal},${trade.getResult()}\n`;
-    csvWriter.writeCsv('comprado.csv', csvHeader, csvRow);
+    const csvHeader = 'Date,Symbol,BuyPrice,ActualPrice,shortTermMA,longTermMA,strength,Signal,P/L\n';
+    const csvRow = `${dateTime},${tradeSignal.symbol},${trade.getBuyPrice()},${tradeSignal.price},${tradeSignal.shortTermMA},${tradeSignal.longTermMA},${tradeSignal.strength},${tradeSignal.signal},${trade.getResult()}\n`;
+    csvWriter.writeCsv('MARKET_COMPRADO.csv', csvHeader, csvRow);
 }
 
 async function help(): Promise<void> {

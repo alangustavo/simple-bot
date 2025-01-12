@@ -4,7 +4,7 @@
   "description": "A simple bot",
   "scripts": {
     "build": "tsc",
-    "start": "ts-node src/index.ts"
+    "start": "npm install && ts-node src/index.ts"
   },
   "author": "Your Name",
   "license": "ISC",
