@@ -6,6 +6,7 @@ class BinanceKlineStream implements Observable {
     private websocketStreamClient: WebsocketStream;
     private observers: Set<ObserverKline> = new Set();
     private activeStreams: { symbol: string, interval: Interval; }[] = [];
+    private lastNotificationTime: number = Date.now();
 
     private constructor() {
         const callbacks = {
@@ -20,6 +21,8 @@ class BinanceKlineStream implements Observable {
             },
         };
         this.websocketStreamClient = new WebsocketStream({ callbacks, combinedStreams: true });
+        this.startReconnectionTimer();
+        this.startNotificationCheckTimer();
     }
 
     public static getInstance(): BinanceKlineStream {
@@ -40,12 +43,25 @@ class BinanceKlineStream implements Observable {
         this.observers.delete(observer);
     }
 
+
     public notifyObservers(data: Record<string, unknown>): void {
+        this.lastNotificationTime = Date.now();
         for (const observer of this.observers) {
             if (observer.stream === data.stream) {
                 observer.update(data);
             }
         }
+    }
+
+    private startNotificationCheckTimer() {
+        setInterval(() => {
+            const currentTime = Date.now();
+            if (currentTime - this.lastNotificationTime > 60 * 1000) { // 1 minute in milliseconds
+                console.debug('BinanceKlineStream: No notifications in the last minute, reconnecting');
+                this.websocketStreamClient.disconnect();
+                this.reconnect();
+            }
+        }, 60 * 1000); // Check every minute
     }
 
     public subscribeToKline(observer: ObserverKline) {
@@ -88,6 +104,14 @@ class BinanceKlineStream implements Observable {
                 this.websocketStreamClient.kline(symbol.toLowerCase(), interval);
             }
         }, 1000); // Wait 1 second before attempting to reconnect
+    }
+
+    private startReconnectionTimer() {
+        setTimeout(() => {
+            console.debug('BinanceKlineStream: 24 hours passed, reconnecting to WebSocket server');
+            this.websocketStreamClient.disconnect();
+            this.reconnect();
+        }, 24 * 60 * 60 * 1000); // 24 hours in milliseconds
     }
 }
 

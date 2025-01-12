@@ -59,7 +59,7 @@ export class BinanceTradeAlan {
 
 
         const isPriceNearSupport1 = price >= support[0] && price <= support[0] * 1.0025; // Ajuste para 1.0025
-        const isPriceNearSupport2 = price >= support[1] && price <= support[1] * 1.005; // Ajuste para 1.005
+        const isPriceNearSupport2 = price >= support[1] && price <= support[1] * 1.005; // Ajuste para 1.01
 
         const isPriceNearResistance1 = price <= resistance[0] && price >= resistance[0] * 0.995; // Ajuste para 0.995
         const isPriceNearResistance2 = price <= resistance[1] && price >= resistance[1] * 0.995; // Ajuste para 0.995
@@ -110,8 +110,8 @@ export class BinanceTradeAlan {
         const lows = this.kline.getLows();
 
         const support = [
-            Math.min(...lows.slice(-10)), // Support1 from the last 10 klines
-            Math.min(...lows.slice(-20, -10)) // Support2 from the last 20 to 10 klines
+            Math.min(...lows.slice(-120)), // Support1 from the last 10 klines
+            Math.min(...lows.slice(-120, -60)) // Support2 from the last 20 to 10 klines
         ];
         const resistance = [
             Math.max(...highs.slice(-10)), // Resistance1 from the last 10 klines
