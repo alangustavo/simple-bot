@@ -222,9 +222,14 @@ async function main() {
                 await trade.sell(sellSignal.price);
             }
 
+            if (sellSignal && trade.getResult() < stopLoss && trade.isOpen()) {
+                await trade.sell(sellSignal.price);
+            }
+
             if (sellSignal?.signal === 'SELL') {
                 await trade.sell(sellSignal.price);
             }
+
             if (!trade.isOpen()) {
                 status = 'VENDIDO';
                 maxPrice = 0;
